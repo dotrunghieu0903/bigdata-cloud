@@ -14,3 +14,15 @@ Spark MLLib, ...
 ## Datasets
 1. https://github.com/tsinghua-fib-lab/ShortVideo_dataset
 2. https://github.com/westlake-repl/MicroLens
+
+Requirements
+
+- PPT -> Slide thuyết trình
+        + Trang Bìa (Tên topic, nhóm thực hiện)
+        + Mục lục
+        + Gioi thiệu
+        + .....
+        + Kết luận và hướng phát triển
+        + Tham khảo
+- PDF -> Báo cáo (Xúc tích, không quá 20 trang)
+- Link Video Demo (Nếu có), github (Nếu có) hoặc bất kỳ tham khảo nào phải đặt trong Page tham khảo của PPT.
