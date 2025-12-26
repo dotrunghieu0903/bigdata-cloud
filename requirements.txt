@@ -9,9 +9,9 @@ pandas==2.1.4
 numpy==1.26.2
 scikit-learn==1.3.2
 
-# Machine Learning / Deep Learning
+# Machine Learning - Distributed (Spark MLlib included in pyspark)
+# Note: implicit library removed - now using Spark MLlib ALS for distributed training
 torch==2.1.2
-implicit==0.7.2
 
 # API Framework
 flask==3.0.0
