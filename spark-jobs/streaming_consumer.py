@@ -121,6 +121,7 @@ def update_user_profile_batch(batch_df, batch_id):
     try:
         import redis
         from pymongo import MongoClient
+        from datetime import datetime
         
         # Connect to Redis
         redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)

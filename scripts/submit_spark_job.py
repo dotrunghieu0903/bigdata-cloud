@@ -11,7 +11,7 @@ def submit_spark_job():
     
     spark_submit_cmd = [
         'docker', 'exec', 'spark-master',
-        'spark-submit',
+        '/opt/spark/bin/spark-submit',
         '--master', 'spark://spark-master:7077',
         '--packages', 
         'org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.2.0',

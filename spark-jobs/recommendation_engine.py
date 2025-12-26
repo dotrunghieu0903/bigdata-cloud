@@ -14,6 +14,7 @@ from pymongo import MongoClient
 import pickle
 import os
 from datetime import datetime
+from pyspark.sql.functions import udf
 
 class DistributedCollaborativeFilteringEngine:
     """
@@ -49,7 +50,7 @@ class DistributedCollaborativeFilteringEngine:
             maxIter=15,                 # Maximum iterations
             regParam=0.01,              # Regularization parameter
             userCol="user_idx",
-            itemCol="video_idx", 
+            itemCol="video_idx",
             ratingCol="weight",
             coldStartStrategy="drop",   # Handle cold start
             implicitPrefs=True,         # Implicit feedback
@@ -101,7 +102,6 @@ class DistributedCollaborativeFilteringEngine:
         video_map_bc = self.spark.sparkContext.broadcast(self.video_id_map)
         
         # Convert IDs to indices using UDF (distributed operation)
-        from pyspark.sql.functions import udf
         
         @udf(IntegerType())
         def user_to_idx(user_id):
@@ -137,7 +137,7 @@ class DistributedCollaborativeFilteringEngine:
         Model training is parallelized across all workers
         """
         print("Training distributed ALS model across Spark cluster...")
-        print(f"Workers will process data in parallel...")
+        print("Workers will process data in parallel...")
         
         # Split data for validation (80/20)
         train_df, test_df = interactions_df.randomSplit([0.8, 0.2], seed=42)
@@ -304,7 +304,6 @@ class DistributedCollaborativeFilteringEngine:
     def update_trending_videos(self):
         """Update trending videos based on recent activity"""
         # Aggregate views/interactions from last 24 hours
-        from datetime import datetime, timedelta
         
         cutoff_time = datetime.utcnow() - timedelta(hours=24)
         

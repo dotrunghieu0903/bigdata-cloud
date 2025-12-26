@@ -11,7 +11,7 @@ def train_model():
     
     spark_submit_cmd = [
         'docker', 'exec', 'spark-master',
-        'spark-submit',
+        '/opt/spark/bin/spark-submit',
         '--master', 'spark://spark-master:7077',
         '--driver-memory', '4g',
         '--executor-memory', '4g',

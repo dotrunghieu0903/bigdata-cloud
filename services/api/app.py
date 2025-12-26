@@ -18,7 +18,8 @@ import logging
 sys.path.append('/app')
 sys.path.append('/opt/spark-jobs')
 
-from recommendation_engine import CollaborativeFilteringEngine
+# Note: API doesn't use Spark for serving - just Redis/MongoDB
+# from recommendation_engine import DistributedCollaborativeFilteringEngine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,15 +44,34 @@ redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=Tr
 mongo_client = MongoClient(MONGODB_URI)
 db = mongo_client.video_recommendation
 
-# Initialize recommendation engine
-rec_engine = CollaborativeFilteringEngine(
-    redis_host=REDIS_HOST,
-    redis_port=REDIS_PORT,
-    mongodb_uri=MONGODB_URI
-)
+# API serves recommendations from cache/database (no Spark needed for serving)
+# Training happens separately via spark-submit
 
-# Try to load existing model
-rec_engine.load_model()
+def get_trending_from_redis(n=20):
+    """Get trending videos from Redis"""
+    trending_key = "trending:videos:24h"
+    trending = redis_client.zrange(trending_key, 0, n-1, desc=True, withscores=True)
+    
+    if trending:
+        return [
+            {
+                'video_id': vid,
+                'score': float(score),
+                'method': 'trending'
+            }
+            for vid, score in trending
+        ]
+    
+    # Fallback to MongoDB
+    trending_docs = db.videos.find().sort('view_count', -1).limit(n)
+    return [
+        {
+            'video_id': doc['video_id'],
+            'score': doc.get('view_count', 0),
+            'method': 'trending_fallback'
+        }
+        for doc in trending_docs
+    ]
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -110,13 +130,18 @@ def get_recommendations(user_id):
             recommendations = json.loads(cached)
             logger.info(f"Returning cached recommendations for {user_id}")
         else:
-            # Get fresh recommendations
-            use_als = (method == 'als')
-            recommendations = rec_engine.get_user_recommendations(
-                user_id, 
-                n=n, 
-                use_als=use_als
-            )
+            # Get recommendations from Redis (populated by Spark streaming)
+            recent_key = f"user:{user_id}:recent_videos"
+            recent_videos = redis_client.zrange(recent_key, 0, n-1, desc=True, withscores=True)
+            
+            if recent_videos:
+                recommendations = [
+                    {'video_id': vid, 'score': float(score), 'method': 'cached'}
+                    for vid, score in recent_videos
+                ]
+            else:
+                # Fallback to trending
+                recommendations = get_trending_from_redis(n)
             
             # Enrich with video metadata
             for rec in recommendations:
@@ -152,7 +177,7 @@ def get_trending():
     try:
         n = int(request.args.get('n', 20))
         
-        trending = rec_engine.get_trending_videos(n)
+        trending = get_trending_from_redis(n)
         
         # Enrich with metadata
         for video in trending:

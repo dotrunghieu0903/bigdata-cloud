@@ -88,7 +88,26 @@ class VideoEventGenerator:
     
     def generate_interaction_event(self):
         """Generate a user interaction event (like, share, comment)"""
-        user_id = self.generate_us (real or fake)"""
+        user_id = self.generate_user_id()
+        video_id = self.generate_video_id()
+        event_type = random.choices(self.event_types[1:], weights=self.event_weights[1:])[0]
+        
+        event = {
+            'event_type': event_type,
+            'user_id': user_id,
+            'video_id': video_id,
+            'timestamp': datetime.utcnow().isoformat(),
+            'session_id': f"session_{random.randint(1, 100000)}"
+        }
+        
+        # Add comment text if it's a comment event
+        if event_type == 'comment':
+            event['comment_text'] = fake.sentence()
+        
+        return event
+    
+    def generate_video_metadata(self):
+        """Generate video metadata (real or fake)"""
         # Try to get real video data if available
         if self.data_mode != 'fake' and self.dataset_manager.is_available():
             real_video = self.dataset_manager.get_random_video()
@@ -143,37 +162,7 @@ class VideoEventGenerator:
             event['total_duration'] = interaction.get('duration', 60)
             event['completion_rate'] = min(1.0, event['watch_time'] / event['total_duration'])
         
-        logger.info(f"Data mode: {self.data_mode}")
-        
-        try:
-            while True:
-                # Try to use real data interactions if available
-                if self.data_mode != 'fake' and random.random() < 0.7:  # 70% real data
-                    real_event = self.generate_event_from_real_interaction()
-                    if real_event:
-                        topic = 'user-events' if real_event['event_type'] == 'view' else 'user-interactions'
-                        self.send_event(topic, real_event, real_event['user_id'])
-                        continue
-                metadata(self):
-        """Generate video metadata"""
-        video_id = self.generate_video_id()
-        
-        metadata = {
-            'video_id': video_id,
-            'title': fake.sentence(nb_words=6),
-            'creator_id': f"creator_{random.randint(1, 5000)}",
-            'category': random.choice(self.categories),
-            'tags': random.sample(
-                ['trending', 'viral', 'funny', 'educational', 'tutorial', 
-                 'music', 'dance', 'challenge', 'diy', 'review'],
-                k=random.randint(2, 5)
-            ),
-            'duration': round(random.uniform(15, 60), 2),
-            'created_at': datetime.utcnow().isoformat(),
-            'resolution': random.choice(['720p', '1080p', '4k']),
-            'language': random.choice(['en', 'vi', 'es', 'fr', 'ja'])
-        }
-        return metadata
+        return event
     
     def send_event(self, topic, event, key=None):
         """Send event to Kafka topic"""
@@ -209,12 +198,7 @@ class VideoEventGenerator:
                 
                 time.sleep(1)
                 
-    # Data mode: 'fake', 'shortvideo', or 'microlens'
-    data_mode = os.getenv('DATA_MODE', 'fake')
-    data_path = os.getenv('DATA_PATH', '/data')
-    
-    logger.info(f"Initializing generator with mode: {data_mode}")
-    generator = VideoEventGenerator(kafka_servers, data_mode=data_mode, data_path=data_path
+        except KeyboardInterrupt:
             logger.info("Stopping event generation...")
         finally:
             self.producer.close()
@@ -223,5 +207,10 @@ if __name__ == "__main__":
     kafka_servers = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
     events_per_second = int(os.getenv('EVENTS_PER_SECOND', '10'))
     
-    generator = VideoEventGenerator(kafka_servers)
+    # Data mode: 'fake', 'shortvideo', or 'microlens'
+    data_mode = os.getenv('DATA_MODE', 'fake')
+    data_path = os.getenv('DATA_PATH', '/data')
+    
+    logger.info(f"Initializing generator with mode: {data_mode}")
+    generator = VideoEventGenerator(kafka_servers, data_mode=data_mode, data_path=data_path)
     generator.run(events_per_second)
