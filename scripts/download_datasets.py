@@ -2,12 +2,11 @@
 Download datasets from external sources
 """
 
-import os
-import sys
-import requests
-import subprocess
 from pathlib import Path
 import logging
+import pandas as pd
+import pickle
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,7 +42,7 @@ def download_shortvideo_dataset():
     # Create directory
     data_dir = Path('data/shortvideo')
     data_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created directory: {data_dir}")
+    logger.info("Created directory: %s", data_dir)
     
     return str(data_dir)
 
@@ -80,7 +79,7 @@ def download_microlens_dataset():
     # Create directory
     data_dir = Path('data/microlens')
     data_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created directory: {data_dir}")
+    logger.info("Created directory: %s", data_dir)
     
     # Try to download sample data if available
     try:
@@ -89,24 +88,24 @@ def download_microlens_dataset():
         # This is a placeholder
         logger.warning("Automatic download not available - please download manually")
     except Exception as e:
-        logger.error(f"Download failed: {e}")
+        logger.error("Download failed: %s", e)
     
     return str(data_dir)
 
 def check_dataset_availability():
     """Check which datasets are available"""
-    logger.info("\n" + "=" * 60)
+    logger.info("\n%s", "=" * 60)
     logger.info("Dataset Availability Check")
-    logger.info("=" * 60)
+    logger.info("%s", "=" * 60)
     
     # Check ShortVideo
     shortvideo_path = Path('data/shortvideo')
     shortvideo_files = list(shortvideo_path.glob('*.pkl'))
     
     if shortvideo_files:
-        logger.info(f"✅ ShortVideo dataset found: {len(shortvideo_files)} files")
+        logger.info("✅ ShortVideo dataset found: %s files", len(shortvideo_files))
         for f in shortvideo_files:
-            logger.info(f"   - {f.name}")
+            logger.info("   - %s", f.name)
     else:
         logger.warning("❌ ShortVideo dataset not found")
     
@@ -115,9 +114,9 @@ def check_dataset_availability():
     microlens_files = list(microlens_path.glob('*.csv'))
     
     if microlens_files:
-        logger.info(f"✅ MicroLens dataset found: {len(microlens_files)} files")
+        logger.info("✅ MicroLens dataset found: %s files", len(microlens_files))
         for f in microlens_files:
-            logger.info(f"   - {f.name}")
+            logger.info("   - %s", f.name)
     else:
         logger.warning("❌ MicroLens dataset not found")
     
@@ -126,9 +125,6 @@ def check_dataset_availability():
 def create_sample_datasets():
     """Create sample datasets for testing"""
     logger.info("Creating sample datasets for testing...")
-    
-    import pandas as pd
-    import pickle
     
     # Create sample ShortVideo data
     shortvideo_path = Path('data/shortvideo')
@@ -151,7 +147,7 @@ def create_sample_datasets():
     with open(shortvideo_path / 'video_info.pkl', 'wb') as f:
         pickle.dump(sample_videos, f)
     
-    logger.info(f"✅ Created sample ShortVideo dataset: {len(sample_videos)} videos")
+    logger.info("✅ Created sample ShortVideo dataset: %s videos", len(sample_videos))
     
     # Create sample MicroLens data
     microlens_path = Path('data/microlens')
@@ -169,12 +165,10 @@ def create_sample_datasets():
     
     videos_df.to_csv(microlens_path / 'videos.csv', index=False)
     
-    logger.info(f"✅ Created sample MicroLens dataset: {len(videos_df)} videos")
+    logger.info("✅ Created sample MicroLens dataset: %s videos", len(videos_df))
 
 def main():
     """Main function"""
-    import argparse
-    
     parser = argparse.ArgumentParser(description='Download and manage datasets')
     parser.add_argument('--dataset', choices=['shortvideo', 'microlens', 'all'], 
                         default='all', help='Which dataset to download')
