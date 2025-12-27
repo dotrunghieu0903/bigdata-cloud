@@ -267,7 +267,7 @@ def main():
     
     try:
         # Load data
-        data_path = "/data/MicroLens-100k" if os.path.exists("/data") else "data/MicroLens-100k"
+        data_path = "/opt/data/MicroLens-100k" if os.path.exists("/opt/data") else "data/MicroLens-100k"
         ratings_df = load_microlens_data(spark, data_path)
         
         # Train model
@@ -280,7 +280,7 @@ def main():
         save_model_to_mongodb(spark, model, user_recs_flat)
         
         # Save model checkpoint
-        checkpoint_path = "/data/checkpoints/als_model" if os.path.exists("/data") else "data/checkpoints/als_model"
+        checkpoint_path = "/opt/data/checkpoints/als_model" if os.path.exists("/opt/data") else "data/checkpoints/als_model"
         save_model_checkpoint(model, checkpoint_path)
         
         print("\n" + "="*80)
