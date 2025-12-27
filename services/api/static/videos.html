@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Streaming - MicroLens Recommendations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+        }
+        
+        .header {
+            background: #212121;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff0000;
+        }
+        
+        .search-bar {
+            flex: 1;
+            max-width: 600px;
+            margin: 0 40px;
+        }
+        
+        .search-bar input {
+            width: 100%;
+            padding: 10px 20px;
+            border: 1px solid #303030;
+            border-radius: 25px;
+            background: #121212;
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        .user-info {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .user-input {
+            padding: 8px 15px;
+            border: 1px solid #303030;
+            border-radius: 20px;
+            background: #121212;
+            color: #fff;
+            width: 150px;
+        }
+        
+        .btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 20px;
+            background: #ff0000;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #cc0000;
+            transform: scale(1.05);
+        }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        .video-player-section {
+            background: #212121;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .video-player {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+        }
+        
+        .video-info {
+            padding: 20px;
+        }
+        
+        .video-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .video-stats {
+            display: flex;
+            gap: 20px;
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            padding: 15px 0;
+            border-top: 1px solid #303030;
+            border-bottom: 1px solid #303030;
+        }
+        
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #3a3a3a;
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .action-btn:hover {
+            background: #4a4a4a;
+        }
+        
+        .recommendations-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        
+        .sidebar-header {
+            background: #212121;
+            padding: 15px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .video-card {
+            background: #212121;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+        }
+        
+        .video-card:hover {
+            background: #2a2a2a;
+            transform: scale(1.02);
+        }
+        
+        .video-thumbnail {
+            width: 168px;
+            height: 94px;
+            background: #000;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .video-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .video-duration {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.8);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .video-details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .video-card-title {
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .video-card-meta {
+            color: #aaa;
+            font-size: 12px;
+        }
+        
+        .score {
+            background: #ff0000;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            border: 3px solid #303030;
+            border-top: 3px solid #ff0000;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #181818;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
+        
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: #3a3a3a;
+            border: none;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            background: #ff0000;
+        }
+        
+        .no-video {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .no-video h2 {
+            margin-bottom: 15px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">📺 NHVideos Recommendation</div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Tìm kiếm video..." onkeyup="searchVideos()">
+        </div>
+        <div class="user-info">
+            <input type="text" id="userIdInput" class="user-input" placeholder="User ID" value="user_1">
+            <button class="btn" onclick="loadRecommendations()">Tải đề xuất</button>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="video-player-section">
+            <div id="videoPlayerContainer">
+                <div class="no-video">
+                    <h2>Chào mừng đến với MicroLens</h2>
+                    <p>Chọn một video từ danh sách đề xuất để bắt đầu xem</p>
+                </div>
+            </div>
+            <div class="video-info" id="videoInfo" style="display: none;">
+                <h1 class="video-title" id="currentVideoTitle">Untitled Video</h1>
+                <div class="video-stats">
+                    <span id="videoViews">0 lượt xem</span>
+                    <span id="videoDate">Hôm nay</span>
+                </div>
+                <div class="action-buttons">
+                    <button class="action-btn" onclick="trackInteraction('like')">
+                        <span>👍</span>
+                        <span>Thích</span>
+                    </button>
+                    <button class="action-btn" onclick="trackInteraction('share')">
+                        <span>🔗</span>
+                        <span>Chia sẻ</span>
+                    </button>
+                    <button class="action-btn" onclick="trackInteraction('comment')">
+                        <span>💬</span>
+                        <span>Bình luận</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="recommendations-sidebar">
+            <div class="sidebar-header">
+                <div class="tab-container">
+                    <button class="tab active" onclick="switchTab('recommendations')">Đề xuất</button>
+                    <button class="tab" onclick="switchTab('trending')">Thịnh hành</button>
+                    <button class="tab" onclick="switchTab('all')">Tất cả</button>
+                </div>
+            </div>
+            <div id="recommendationsContainer">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Đang tải video...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5000/api/v1';
+        let currentVideo = null;
+        let currentUserId = 'user_1';
+        let currentTab = 'recommendations';
+        let allVideos = [];
+        let watchStartTime = null;
+        
+        async function loadRecommendations() {
+            currentUserId = document.getElementById('userIdInput').value || 'user_1';
+            currentTab = 'recommendations';
+            
+            const container = document.getElementById('recommendationsContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải đề xuất...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/recommendations/${currentUserId}?n=20`);
+                const data = await response.json();
+                
+                displayVideoList(data.recommendations || []);
+            } catch (error) {
+                container.innerHTML = `<div class="loading">Lỗi: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadTrending() {
+            const container = document.getElementById('recommendationsContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải video thịnh hành...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/trending?n=20`);
+                const data = await response.json();
+                
+                displayVideoList(data.trending || []);
+            } catch (error) {
+                container.innerHTML = `<div class="loading">Lỗi: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadAllVideos() {
+            const container = document.getElementById('recommendationsContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải tất cả video...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/videos/list`);
+                const data = await response.json();
+                
+                allVideos = data.videos || [];
+                displayVideoList(allVideos);
+            } catch (error) {
+                container.innerHTML = `<div class="loading">Lỗi: ${error.message}</div>`;
+            }
+        }
+        
+        function displayVideoList(videos) {
+            const container = document.getElementById('recommendationsContainer');
+            
+            if (videos.length === 0) {
+                container.innerHTML = '<div class="loading">Không có video nào</div>';
+                return;
+            }
+            
+            container.innerHTML = videos.map(video => `
+                <div class="video-card" onclick='playVideo(${JSON.stringify(video)})'>
+                    <div class="video-thumbnail">
+                        ${video.cover_url ? 
+                            `<img src="${API_BASE.replace('/api/v1', '')}${video.cover_url}" onerror="this.style.display='none'">` : 
+                            '📹'
+                        }
+                        ${video.duration ? `<div class="video-duration">${formatDuration(video.duration)}</div>` : ''}
+                    </div>
+                    <div class="video-details">
+                        <div class="video-card-title">${video.title || video.video_id}</div>
+                        <div class="video-card-meta">
+                            ${video.creator_id || 'Unknown Creator'}<br>
+                            ${video.category || 'Video'}
+                        </div>
+                        ${video.score ? `<span class="score">⭐ ${video.score.toFixed(1)}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function playVideo(video) {
+            currentVideo = video;
+            
+            // Track previous video watch time
+            if (watchStartTime) {
+                const watchTime = (Date.now() - watchStartTime) / 1000;
+                trackVideoView(currentUserId, currentVideo.video_id, watchTime);
+            }
+            
+            watchStartTime = Date.now();
+            
+            const playerContainer = document.getElementById('videoPlayerContainer');
+            const videoInfo = document.getElementById('videoInfo');
+            
+            // Check if video file exists
+            if (video.stream_url) {
+                playerContainer.innerHTML = `
+                    <video class="video-player" controls autoplay onended="onVideoEnded()">
+                        <source src="${API_BASE.replace('/api/v1', '')}${video.stream_url}" type="video/mp4">
+                        Trình duyệt của bạn không hỗ trợ phát video.
+                    </video>
+                `;
+            } else {
+                playerContainer.innerHTML = `
+                    <div class="no-video" style="background: #000; color: white; display: flex; align-items: center; justify-content: center; height: 100%; aspect-ratio: 16/9;">
+                        <div style="text-align: center;">
+                            <h2 style="color: white;">📹 Video Preview</h2>
+                            <p style="color: #aaa;">Video file not available</p>
+                            <p style="color: #666; font-size: 12px; margin-top: 10px;">${video.video_id}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Update video info
+            document.getElementById('currentVideoTitle').textContent = video.title || video.video_id;
+            document.getElementById('videoViews').textContent = `${video.view_count || 0} lượt xem`;
+            document.getElementById('videoDate').textContent = video.upload_date || 'Hôm nay';
+            videoInfo.style.display = 'block';
+        }
+        
+        function onVideoEnded() {
+            if (watchStartTime) {
+                const watchTime = (Date.now() - watchStartTime) / 1000;
+                trackVideoView(currentUserId, currentVideo.video_id, watchTime, currentVideo.duration || watchTime);
+            }
+        }
+        
+        async function trackVideoView(userId, videoId, watchTime, totalDuration) {
+            try {
+                const event = {
+                    event_type: 'view',
+                    user_id: userId,
+                    video_id: videoId,
+                    watch_time: watchTime,
+                    total_duration: totalDuration || watchTime,
+                    session_id: `session_${Date.now()}`,
+                    device_type: 'desktop'
+                };
+                
+                await fetch(`${API_BASE}/events/track`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(event)
+                });
+                
+                console.log('View tracked:', event);
+            } catch (error) {
+                console.error('Error tracking view:', error);
+            }
+        }
+        
+        async function trackInteraction(type) {
+            if (!currentVideo) {
+                alert('Vui lòng chọn một video trước');
+                return;
+            }
+            
+            try {
+                const event = {
+                    event_type: type,
+                    user_id: currentUserId,
+                    video_id: currentVideo.video_id,
+                    session_id: `session_${Date.now()}`
+                };
+                
+                await fetch(`${API_BASE}/events/track`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(event)
+                });
+                
+                alert(`Đã ${type === 'like' ? 'thích' : type === 'share' ? 'chia sẻ' : 'bình luận'} video!`);
+            } catch (error) {
+                alert('Lỗi: ' + error.message);
+            }
+        }
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update tab styles
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Load content based on tab
+            if (tab === 'recommendations') {
+                loadRecommendations();
+            } else if (tab === 'trending') {
+                loadTrending();
+            } else if (tab === 'all') {
+                loadAllVideos();
+            }
+        }
+        
+        function searchVideos() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (currentTab === 'all' && allVideos.length > 0) {
+                const filtered = allVideos.filter(v => 
+                    (v.title && v.title.toLowerCase().includes(query)) ||
+                    (v.video_id && v.video_id.toLowerCase().includes(query)) ||
+                    (v.category && v.category.toLowerCase().includes(query))
+                );
+                displayVideoList(filtered);
+            }
+        }
+        
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Initialize
+        loadRecommendations();
+    </script>
+</body>
+</html>
