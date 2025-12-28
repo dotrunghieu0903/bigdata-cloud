@@ -73,6 +73,28 @@ redis_client = None
 if REDIS_AVAILABLE:
     try:
         redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        redis_client.ping()  # Test connection
+    except Exception as e:
+        print(f"Warning: Could not connect to Redis: {e}")
+        redis_client = None
+
+# MongoDB connection
+mongo_client = None
+db = None
+if MONGODB_AVAILABLE:
+    try:
+        mongo_client = MongoClient(MONGODB_URI)
+        db = mongo_client.video_recommendation
+        # Test connection
+        mongo_client.admin.command('ping')
+    except Exception as e:
+        print(f"Warning: Could not connect to MongoDB: {e}")
+        mongo_client = None
+        db = None
+
+def get_trending_from_redis(n=20):
+    """Get trending videos from Redis or fallback to MongoDB"""
+    # Try Redis first
     if redis_client:
         try:
             trending_key = "trending:videos:24h"
@@ -106,29 +128,28 @@ if REDIS_AVAILABLE:
             print(f"MongoDB error: {e}")
     
     # Return mock data if no services available
-    return [        {
-                'video_id': vid,
-                'score': float(score),
-                'method': 'trending'
-            }
-            for vid, score in trending
-        ]
-    
-    # Fallback to MongoDB
-    trending_docs = db.videos.find().sort('view_count', -1).limit(n)
     return [
         {
-            'video_id': doc['video_id'],
-            'score': doc.get('view_count', 0),
-            'method': 'trending_fallback'
+            'video_id': f'mock_video_{i}',
+            'score': 100 - i,
+            'method': 'mock'
         }
-        for doc in trending_docs
+        for i in range(min(n, 10))
     ]
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'kafka': check_kafka(),
+        'redis': check_redis(),
+        'mongodb': check_mongodb()
+    })
+
+def check_kafka():
+    """Check Kafka connection"""
     if not KAFKA_AVAILABLE or not kafka_producer:
         return 'unavailable'
     try:
@@ -151,18 +172,21 @@ def check_mongodb():
     """Check MongoDB connection"""
     if not MONGODB_AVAILABLE or not mongo_client:
         return 'unavailable'
-
-def check_redis():
-    """Check Redis connection"""
     try:
-        redis_client.ping()
+        mongo_client.admin.command('ping')
         return 'connected'
     except:
         return 'disconnected'
 
-def check_mongodb():
-    """Check MongoDB connection"""
+@app.route('/api/v1/recommendations/<user_id>', methods=['GET'])
+def get_recommendations(user_id):
+    """
+    Get personalized recommendations for a user
+    Query params:
+    - n: number of recommendations (default: 20)
+    """
     try:
+        n = int(request.args.get('n', 20))
         recommendations = []
         
         # Check cache first
@@ -186,7 +210,9 @@ def check_mongodb():
                     
                     if recent_videos:
                         recommendations = [
-                            {'video_id': vid, 'score': float(score), 'method': 'cached'}
+                            {'video_id': vid.decode() if isinstance(vid, bytes) else vid, 
+                             'score': float(score), 
+                             'method': 'cached'}
                             for vid, score in recent_videos
                         ]
                 except Exception as e:
@@ -203,9 +229,9 @@ def check_mongodb():
                         video_data = db.videos.find_one({'video_id': rec['video_id']})
                         if video_data:
                             rec['title'] = video_data.get('title', '')
-                            rec['category'] = video_data.get('category', '')
-                            rec['creator_id'] = video_data.get('creator_id', '')
-                            rec['duration'] = video_data.get('duration', 0)
+                            rec['tags'] = video_data.get('tags', '')
+                            rec['views'] = video_data.get('views', 0)
+                            rec['likes'] = video_data.get('likes', 0)
                 except Exception as e:
                     logger.warning(f"MongoDB error: {e}")
             
@@ -214,34 +240,12 @@ def check_mongodb():
                 try:
                     redis_client.setex(cache_key, 300, json.dumps(recommendations))
                 except:
-                    passhed'}
-                    for vid, score in recent_videos
-                ]
-            else:
-                # Fallback to trending
-                recommendations = get_trending_from_redis(n)
-            
-            # Enrich with video metadata
-            for rec in recommendations:
-                video_data = db.videos.find_one({'video_id': rec['video_id']})
-                if video_data:
-                    rec['title'] = video_data.get('title', '')
-                    rec['category'] = video_data.get('category', '')
-                    rec['creator_id'] = video_data.get('creator_id', '')
-                    rec['duration'] = video_data.get('duration', 0)
-            
-            # Cache for 5 minutes
-            redis_client.setex(cache_key, 300, json.dumps(recommendations))
-        if db:
-            try:
-                for video in trending:
-                    video_data = db.videos.find_one({'video_id': video['video_id']})
-                    if video_data:
-                        video['title'] = video_data.get('title', '')
-                        video['category'] = video_data.get('category', '')
-                        video['creator_id'] = video_data.get('creator_id', '')
-            except Exception as e:
-                logger.warning(f"MongoDB error: {e}"
+                    pass
+        
+        return jsonify({
+            'user_id': user_id,
+            'recommendations': recommendations,
+            'count': len(recommendations),
             'timestamp': datetime.utcnow().isoformat()
         })
         
@@ -262,12 +266,13 @@ def get_trending():
         trending = get_trending_from_redis(n)
         
         # Enrich with metadata
-        for video in trending:
-            video_data = db.videos.find_one({'video_id': video['video_id']})
-            if video_data:
-                video['title'] = video_data.get('title', '')
-                video['category'] = video_data.get('category', '')
-                video['creator_id'] = video_data.get('creator_id', '')
+        if db:
+            for video in trending:
+                video_data = db.videos.find_one({'video_id': video['video_id']})
+                if video_data:
+                    video['title'] = video_data.get('title', '')
+                    video['category'] = video_data.get('category', '')
+                    video['creator_id'] = video_data.get('creator_id', '')
         
         return jsonify({
             'trending': trending,
@@ -290,13 +295,9 @@ def track_event():
         "watch_time": 30.5,
         "total_duration": 60.0
     }
-    """ if available
-        if kafka_producer:
-            try:
-                kafka_producer.send(topic, value=event_data)
-                kafka_producer.flush()
-            except Exception as e:
-                logger.warning(f"Kafka error: {e}"get_json()
+    """
+    try:
+        event_data = request.get_json()
         
         # Validate required fields
         required_fields = ['event_type', 'user_id', 'video_id']
@@ -307,219 +308,44 @@ def track_event():
         event_data['timestamp'] = datetime.utcnow().isoformat()
         
         # Determine topic based on event type
+        topic = 'user-events'
         if event_data['event_type'] == 'view':
-            topic = 'user-events'
-            
-        profile = None
+            topic = 'user-views'
+        elif event_data['event_type'] in ['like', 'share', 'comment']:
+            topic = 'user-interactions'
         
-        # Check Redis cache first
+        # Send to Kafka if available
+        if kafka_producer:
+            try:
+                kafka_producer.send(topic, value=event_data)
+                kafka_producer.flush()
+                logger.info(f"Event sent to Kafka: {event_data['event_type']} - {event_data['user_id']}")
+            except Exception as e:
+                logger.warning(f"Kafka error: {e}")
+        
+        # Also store in Redis for quick access
         if redis_client:
             try:
-                cache_key = f"profile:{user_id}"
-                cached_profile = redis_client.get(cache_key)
-                if cached_profile:
-                    profile = json.loads(cached_profile)
+                # Store user's recent videos
+                user_key = f"user:{event_data['user_id']}:recent_videos"
+                redis_client.zadd(user_key, {event_data['video_id']: datetime.utcnow().timestamp()})
+                redis_client.expire(user_key, 86400)  # 24 hours
+                
+                # Update video stats
+                video_key = f"video:{event_data['video_id']}:stats"
+                redis_client.hincrby(video_key, event_data['event_type'] + '_count', 1)
+                redis_client.expire(video_key, 86400 * 7)  # 7 days
+                
             except Exception as e:
                 logger.warning(f"Redis error: {e}")
         
-        if not profile and db:
-            try:
-                # Get from MongoDB
-                profile = db.user_profiles.find_one({'user_id': user_id}, {'_id': 0})
-                
-                if not profile:
-                    return jsonify({'error': 'User not found'}), 404
-                
-                # Cache it
-                if redis_client:
-                    try:
-                        redis_client.setex(cache_key, 600, json.dumps(profile))
-                    except:
-                        pass
-            except Exception as e:
-                logger.warning(f"MongoDB error: {e}")
-                return jsonify({'error': 'Database unavailable'}), 503
-        
-        if not profile:
-            return jsonify({'error': 'User not found'}), 404
-        
-        # Get recent interactions
-        recent_interactions = []
-        if db:
-            try:
-                recent_interactions = list(db.interactions.find(
-                    {'user_id': user_id}
-                ).sort('timestamp', -1).limit(20))
-                
-                for interaction in recent_interactions:
-                    interaction['_id'] = str(interaction['_id'])
-            except Exception as e:
-                logger.warning(f"MongoDB error: {e}"
-
-@app.route('/api/v1/user/<user_id>/profile', methods=['GET'])
-def get_user_profile(user_id):
-    """Get user profile and statistics"""
-    try:
-        # Check Redis cache first
-        cache_key = f"profile:{user_id}"
-        cached_profile = redis_client.get(cache_key)
-        
-        if cached_profile:
-            profile = json.loads(cached_profile)
-        else:
-            # Get from MongoDB
-            profNone
-        
-        if db:
-            try:
-                video = db.videos.find_one({'video_id': video_id}, {'_id': 0})
-            except Exception as e:
-                logger.warning(f"MongoDB error: {e}")
-        
-        if not video:
-            return jsonify({'error': 'Video not found'}), 404
-        
-        # Get real-time stats from Redis
-        if redis_client:
-            try:
-                stats_key = f"video:{video_id}:stats"
-                stats = redis_client.hgetall(stats_key)
-                
-                video['realtime_stats'] = {
-                    k: int(v) for k, v in stats.items()
-                }
-            except Exception as e:
-                logger.warning(f"Redis error: {e}")
-                video['realtime_stats'] = {).sort('timestamp', -1).limit(20))
-        
-        for interaction in recent_interactions:
-        if not db:
-            return jsonify({'error': 'Database unavailable'}), 503
-        
-        # Get video metadata
-        try:
-            video = db.videos.find_one({'video_id': video_id})
-        except Exception as e:
-            logger.warning(f"MongoDB error: {e}")
-            return jsonify({'error': 'Database error'}), 500
-        
-        if not video:
-            return jsonify({'error': 'Video not found'}), 404
-        
-        # Find similar videos by category and tags
-        similar = []
-        try:
-            similar = list(db.videos.find({
-                '$or': [
-                    {'category': video['category']},
-                    {'tags': {'$in': video.get('tags', [])}}
-                ],
-                'video_id': {'$ne': video_id}
-            }).sort('engagement_score', -1).limit(n))
-            
-            for vid in similar:
-                vid['_id'] = str(vid['_id'])
-        except Exception as e:
-            logger.warning(f"MongoDB error: {e}"deo_id': video_id}, {'_id': 0})
-        
-        if not video:
-            return jsonify({'error': 'Video not found'}), 404
-        
-        # Get real-time stats from Redis
-        stats_key = f"video:{video_id}:stats"
-        stats = redis_client.hgetall(stats_key)
-        
-        video['realtime_stats'] = {
-            k: int(v) for k0,
-            'total_videos': 0,
-            'total_interactions': 0,
-            'active_sessions': 0,
-            'timestamp': datetime.utcnow().isoformat()
-        }
-        
-        if db:
-            try:
-                stats['total_users'] = db.users.count_documents({})
-                stats['total_videos'] = db.videos.count_documents({})
-                stats['total_interactions'] = db.interactions.count_documents({})
-            except Exception as e:
-                logger.warning(f"MongoDB error: {e}")
-        
-        if redis_client:
-            try:
-                stats['active_sessions'] = redis_client.dbsize()
-            except Exception as e:
-                logger.warning(f"Redis error: {e}")t Exception as e:
-        logger.error(f"Error getting video metadata: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/v1/similar/<video_id>', methods=['GET'])
-def get_similar_videos(video_id):
-    """Get videos similar to a given video"""
-    try:
-        n = int(request.args.get('n', 10))
-        
-        # Get video metadata
-        video = db.videos.find_one({'video_id': video_id})
-        
-        if not video:
-            return jsonify({'error': 'Video not found'}), 404
-        
-        # Find similar videos by category and tags
-        similar = list(db.videos.find({
-            '$or': [
-                {'category': video['category']},
-                {'tags': {'$in': video.get('tags', [])}}
-            ],
-            'video_id': {'$ne': video_id}
-        }).sort('engagement_score', -1).limit(n))
-        
-        for vid in similar:
-            vid['_id'] = str(vid['_id'])
-        
         return jsonify({
-            'video_id': video_id,
-            'similar_videos': similar,
-            'count': len(similar)
+            'status': 'success',
+            'message': 'Event tracked successfully'
         })
         
     except Exception as e:
-        logger.error(f"Error getting similar videos: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/v1/stats', methods=['GET'])
-def get_system_stats():
-    """Get system-wide statistics"""
-    try:
-        stats = {
-            'total_users': db.users.count_documents({}),
-            'total_videos': db.videos.count_documents({}),
-            'total_interactions': db.interactions.count_documents({}),
-            'active_sessions': redis_client.dbsize(),
-            'timestamp': datetime.utcnow().isoformat()
-        }
-        
-        return jsonify(stats)
-        
-    except Exception as e:
-        logger.error(f"Error getting stats: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/v1/retrain', methods=['POST'])
-def trigger_retrain():
-    """Trigger model retraining (admin endpoint)"""
-    try:
-        # This would trigger an async retraining job
-        # For now, we'll just return a message
-        
-        return jsonify({
-            'status': 'queued',
-            'message': 'Model retraining job queued',
-            'timestamp': datetime.utcnow().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"Error triggering retrain: {e}")
+        logger.error(f"Error tracking event: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/v1/videos/<video_id>/stream', methods=['GET'])
@@ -531,32 +357,7 @@ def stream_video(video_id):
         if not video_path.exists():
             return jsonify({'error': 'Video file not found'}), 404
         
-        # Support range requests for video seeking
-        file_size = video_path.stat().st_size
-        range_header = request.headers.get('Range', None)
-        
-        if range_header:
-            byte_range = range_header.replace('bytes=', '').split('-')
-            start = int(byte_range[0])
-            end = int(byte_range[1]) if byte_range[1] else file_size - 1
-            length = end - start + 1
-            
-            with open(video_path, 'rb') as f:
-                f.seek(start)
-                data = f.read(length)
-            
-            response = Response(
-                data,
-                206,  # Partial Content
-                mimetype='video/mp4',
-                direct_passthrough=True
-            )
-            response.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
-            response.headers.add('Accept-Ranges', 'bytes')
-            response.headers.add('Content-Length', str(length))
-            return response
-        else:
-            return send_from_directory(VIDEOS_DIR, f"{video_id}.mp4", mimetype='video/mp4')
+        return send_from_directory(VIDEOS_DIR, f"{video_id}.mp4", mimetype='video/mp4')
         
     except Exception as e:
         logger.error(f"Error streaming video: {e}")
@@ -569,7 +370,6 @@ def get_video_cover(video_id):
         cover_path = COVERS_DIR / f"{video_id}.jpg"
         
         if not cover_path.exists():
-            # Return a default placeholder
             return jsonify({'error': 'Cover not found'}), 404
         
         return send_from_directory(COVERS_DIR, f"{video_id}.jpg", mimetype='image/jpeg')
@@ -591,14 +391,22 @@ def list_available_videos():
         # Get metadata from database
         videos = []
         for video_id in video_ids:
-            video_data = db.videos.find_one({'video_id': video_id}, {'_id': 0})
-            if video_data:
-                video_data['has_file'] = True
-                video_data['stream_url'] = f"/api/v1/videos/{video_id}/stream"
-                video_data['cover_url'] = f"/api/v1/videos/{video_id}/cover"
-                videos.append(video_data)
+            if db:
+                video_data = db.videos.find_one({'video_id': video_id}, {'_id': 0})
+                if video_data:
+                    video_data['has_file'] = True
+                    video_data['stream_url'] = f"/api/v1/videos/{video_id}/stream"
+                    video_data['cover_url'] = f"/api/v1/videos/{video_id}/cover"
+                    videos.append(video_data)
+                else:
+                    # Video file exists but no metadata
+                    videos.append({
+                        'video_id': video_id,
+                        'has_file': True,
+                        'stream_url': f"/api/v1/videos/{video_id}/stream",
+                        'cover_url': f"/api/v1/videos/{video_id}/cover"
+                    })
             else:
-                # Video file exists but no metadata
                 videos.append({
                     'video_id': video_id,
                     'has_file': True,
@@ -616,9 +424,51 @@ def list_available_videos():
         logger.error(f"Error listing videos: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/v1/stats', methods=['GET'])
+def get_system_stats():
+    """Get system statistics"""
+    try:
+        stats = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'services': {
+                'kafka': check_kafka(),
+                'redis': check_redis(), 
+                'mongodb': check_mongodb()
+            }
+        }
+        
+        if db:
+            try:
+                stats['total_users'] = db.users.count_documents({})
+                stats['total_videos'] = db.videos.count_documents({})
+                stats['total_interactions'] = db.events.count_documents({})
+            except:
+                pass
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Serve static files
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files"""
+    return send_from_directory('static', filename)
+
+@app.route('/')
+def index():
+    """Redirect to video player"""
+    return send_from_directory('static', 'index.html')
+
 if __name__ == '__main__':
     port = int(os.getenv('API_PORT', 5000))
     debug = os.getenv('API_DEBUG', 'False').lower() == 'true'
     
-    logger.info(f"Starting API service on port {port}")
+    logger.info(f"Starting Video Recommendation API on port {port}")
+    logger.info(f"Kafka: {'Available' if KAFKA_AVAILABLE else 'Unavailable'}")
+    logger.info(f"Redis: {'Available' if REDIS_AVAILABLE else 'Unavailable'}")
+    logger.info(f"MongoDB: {'Available' if MONGODB_AVAILABLE else 'Unavailable'}")
+    
     app.run(host='0.0.0.0', port=port, debug=debug)

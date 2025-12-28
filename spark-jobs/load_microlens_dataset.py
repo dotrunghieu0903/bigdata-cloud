@@ -21,15 +21,30 @@ def create_spark_session():
 def load_video_metadata(spark, data_path="/opt/data/MicroLens-100k"):
     """
     Load video metadata from MicroLens-100k dataset
-    Combines titles, likes/views, and tags
+    Gets video_id from pairs.csv (item column), then joins with titles, likes/views, and tags
     """
     
     print("\n" + "="*80)
     print("LOADING VIDEO METADATA")
     print("="*80)
     
-    # 1. Load titles
-    print("\n1. Loading video titles...")
+    # 1. Get distinct video IDs from pairs.csv (column 'item')
+    print("\n1. Getting video IDs from pairs.csv...")
+    pairs_df = spark.read.csv(
+        f"{data_path}/MicroLens-100k_pairs.csv",
+        header=True,
+        inferSchema=True
+    )
+    
+    video_ids_df = pairs_df.select(
+        col("item").cast("string").alias("video_id")
+    ).distinct()
+    
+    print(f"   Found {video_ids_df.count()} unique videos")
+    video_ids_df.show(5)
+    
+    # 2. Load titles (column 0 = video_id, column 1 = title)
+    print("\n2. Loading video titles...")
     titles_df = spark.read.csv(
         f"{data_path}/MicroLens-100k_title_en.csv",
         header=False,
@@ -42,8 +57,8 @@ def load_video_metadata(spark, data_path="/opt/data/MicroLens-100k"):
     print(f"   Loaded {titles_df.count()} video titles")
     titles_df.show(5, truncate=False)
     
-    # 2. Load likes and views
-    print("\n2. Loading likes and views...")
+    # 3. Load likes and views
+    print("\n3. Loading likes and views...")
     likes_views_schema = StructType([
         StructField("video_id", StringType(), True),
         StructField("likes", IntegerType(), True),
@@ -59,16 +74,13 @@ def load_video_metadata(spark, data_path="/opt/data/MicroLens-100k"):
     print(f"   Loaded {likes_views_df.count()} video stats")
     likes_views_df.show(5)
     
-    # 3. Load tags
-    print("\n3. Loading video tags...")
+    # 4. Load tags (column 0 = video_id, column 1 = tags)
+    print("\n4. Loading video tags...")
     tags_df = spark.read.csv(
         f"{data_path}/tags_to_summary.csv",
         header=False,
         inferSchema=True
-    )
-    
-    # Rename columns to match
-    tags_df = tags_df.select(
+    ).select(
         col("_c0").cast("string").alias("video_id"),
         col("_c1").alias("tags")
     )
@@ -76,9 +88,10 @@ def load_video_metadata(spark, data_path="/opt/data/MicroLens-100k"):
     print(f"   Loaded {tags_df.count()} video tags")
     tags_df.show(5, truncate=False)
     
-    # 4. Combine all metadata
-    print("\n4. Combining metadata...")
-    video_metadata = titles_df \
+    # 5. Combine all metadata starting from video_ids
+    print("\n5. Combining metadata...")
+    video_metadata = video_ids_df \
+        .join(titles_df, "video_id", "left") \
         .join(likes_views_df, "video_id", "left") \
         .join(tags_df, "video_id", "left")
     
