@@ -409,16 +409,27 @@
         }
         
         async function loadAllVideos() {
+            console.log('Loading all videos...');
             const container = document.getElementById('recommendationsContainer');
             container.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải tất cả video...</div>';
             
             try {
-                const response = await fetch(`${API_BASE}/videos/list`);
+                const url = `${API_BASE}/videos/list`;
+                console.log('Calling API:', url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('API response:', data);
                 
                 allVideos = data.videos || [];
+                console.log('Total videos loaded:', allVideos.length);
                 displayVideoList(allVideos);
             } catch (error) {
+                console.error('Error loading videos:', error);
                 container.innerHTML = `<div class="loading">Lỗi: ${error.message}</div>`;
             }
         }
@@ -453,6 +464,7 @@
         }
         
         function playVideo(video) {
+            console.log('Playing video:', video);
             currentVideo = video;
             
             // Track previous video watch time
@@ -468,9 +480,12 @@
             
             // Check if video file exists
             if (video.stream_url) {
+                const streamUrl = video.stream_url.startsWith('http') ? video.stream_url : `http://localhost:5000${video.stream_url}`;
+                console.log('Stream URL:', streamUrl);
+                
                 playerContainer.innerHTML = `
                     <video class="video-player" controls autoplay onended="onVideoEnded()">
-                        <source src="${API_BASE.replace('/api/v1', '')}${video.stream_url}" type="video/mp4">
+                        <source src="${streamUrl}" type="video/mp4">
                         Trình duyệt của bạn không hỗ trợ phát video.
                     </video>
                 `;
@@ -551,6 +566,7 @@
         }
         
         function switchTab(tab) {
+            console.log('Switching to tab:', tab);
             currentTab = tab;
             
             // Update tab styles
@@ -559,10 +575,13 @@
             
             // Load content based on tab
             if (tab === 'recommendations') {
+                console.log('Loading recommendations...');
                 loadRecommendations();
             } else if (tab === 'trending') {
+                console.log('Loading trending...');
                 loadTrending();
             } else if (tab === 'all') {
+                console.log('Loading all videos...');
                 loadAllVideos();
             }
         }
